@@ -41,7 +41,7 @@ def predict_category(text: str):
             category = "Security"
         elif "cloud" in lowered or "server" in lowered or "deploy" in lowered:
             category = "Cloud"
-        elif "learning" in lowered or "model" in lowered or "train" in lowered:
+        elif "learning" in lowered or "model" in lowered or "train" in lowered or "dataset" in lowered or "prediction" in lowered:
             category = "ML"
         else:
             category = "AI"

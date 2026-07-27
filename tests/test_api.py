@@ -47,3 +47,9 @@ def test_classifier_heuristic_fallback_detects_ml_and_cv_keywords():
 
     assert ml_result["category"] == "ML"
     assert cv_result["category"] == "CV"
+
+
+def test_classifier_heuristic_fallback_detects_dataset_keywords():
+    result = predict_category("A dataset improves prediction accuracy")
+
+    assert result["category"] == "ML"
