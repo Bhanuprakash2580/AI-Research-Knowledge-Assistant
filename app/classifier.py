@@ -1,12 +1,18 @@
 import os
 from pathlib import Path
+import importlib
 
 try:
-    import tensorflow as tf
-    from tensorflow.keras.layers import TextVectorization, Dense
-    from tensorflow.keras import Sequential
+    tf = importlib.import_module("tensorflow")
+    keras_layers = importlib.import_module("tensorflow.keras.layers")
+    keras = importlib.import_module("tensorflow.keras")
+    TextVectorization = keras_layers.TextVectorization
+    Dense = keras_layers.Dense
+    Sequential = keras.Sequential
 except Exception:  # pragma: no cover - optional dependency
     tf = None
+    keras_layers = None
+    keras = None
     TextVectorization = Dense = Sequential = None
 
 
