@@ -97,6 +97,8 @@ def rag_qa(req: QARequest):
     context, sources = build_context(results)
     answer = None
     answer_generated = False
+    llm_error_note = None
+
     if os.getenv("OPENAI_API_KEY"):
         try:
             from openai import OpenAI
@@ -119,17 +121,22 @@ def rag_qa(req: QARequest):
             answer = resp.choices[0].message.content
             answer_generated = True
         except Exception as exc:
-            answer = f"LLM error: {exc}"
+            err_msg = str(exc)
+            if "insufficient_quota" in err_msg or "429" in err_msg:
+                llm_error_note = "⚠️ OpenAI API Quota Exceeded (Error 429). Please check your plan and billing details at platform.openai.com."
+            else:
+                llm_error_note = f"⚠️ LLM generation failed ({err_msg})."
 
     if answer is None:
         snippets = "\n\n".join(
-            f"- {source['document']} page {source['page_number']}: {result['text'][:350]}"
+            f"- {source['document']} (Page {source['page_number'] or 'N/A'}, Chunk {source['chunk_id']}):\n  \"{result['text'][:350]}\""
             for source, result in zip(sources, results)
         )
-        answer = (
-            "LLM not configured; here are the most relevant grounded excerpts:\n"
-            f"{snippets}"
-        )
+        if llm_error_note:
+            prefix = f"{llm_error_note}\n\nFalling back to grounded document context:\n\n"
+        else:
+            prefix = "LLM not configured; here are the most relevant grounded excerpts:\n\n"
+        answer = prefix + snippets
 
     if req.session_id:
         memory.append_message(req.session_id, "user", req.query)

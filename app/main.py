@@ -346,12 +346,14 @@ HTML_UI = """<!DOCTYPE html>
           body: JSON.stringify({ query, mode, k, session_id })
         });
         const data = await res.json();
-        ansDiv.innerHTML = `<strong>Answer:</strong><br>${data.answer || 'No answer generated.'}`;
-        if (data.context && data.context.length) {
-          citDiv.innerHTML = data.context.map(c => `
+        const formattedAnswer = (data.answer || 'No answer generated.').replace(/\n/g, '<br>');
+        ansDiv.innerHTML = `<strong>Answer:</strong><br>${formattedAnswer}`;
+        const citations = data.retrieved_context || data.sources || [];
+        if (citations.length) {
+          citDiv.innerHTML = citations.map(c => `
             <div class="citation-card">
-              <strong>${c.document}</strong> (Page ${c.page_number || 'N/A'}) &bull; Score: ${(c.score || 0).toFixed(2)}
-              <p style="color: var(--text-muted); margin-top:0.3rem;">"${c.text}"</p>
+              <strong>${c.document || c.file_name || c.doc_id}</strong> (Page ${c.page_number || 'N/A'}) &bull; Score: ${(c.score || 0).toFixed(2)}
+              <p style="color: var(--text-muted); margin-top:0.3rem;">"${c.text || ''}"</p>
             </div>
           `).join('');
         } else {
@@ -385,7 +387,13 @@ HTML_UI = """<!DOCTYPE html>
       try {
         const res = await fetch(`/analysis/summarize/${docId}?type=${type}`);
         const data = await res.json();
-        out.innerHTML = `<div style="background:rgba(0,0,0,0.3); padding:1rem; border-radius:8px; white-space:pre-wrap;">${JSON.stringify(data.summary, null, 2)}</div>`;
+        let summaryHtml = typeof data.summary === 'string'
+          ? data.summary
+          : `<pre style="white-space:pre-wrap;">${JSON.stringify(data.summary, null, 2)}</pre>`;
+        if (data.note) {
+          summaryHtml = `<div style="color:var(--warning); margin-bottom:0.5rem; font-size:0.85rem;">ℹ️ ${data.note}</div>` + summaryHtml;
+        }
+        out.innerHTML = `<div style="background:rgba(0,0,0,0.3); padding:1rem; border-radius:8px;">${summaryHtml}</div>`;
       } catch (err) {
         out.innerHTML = 'Failed to generate summary.';
       }
@@ -404,7 +412,13 @@ HTML_UI = """<!DOCTYPE html>
           body: JSON.stringify({ doc_ids: selected, focus })
         });
         const data = await res.json();
-        out.innerHTML = `<div style="background:rgba(0,0,0,0.3); padding:1rem; border-radius:8px; white-space:pre-wrap;">${JSON.stringify(data.comparison, null, 2)}</div>`;
+        let compHtml = typeof data.comparison === 'string'
+          ? data.comparison
+          : `<pre style="white-space:pre-wrap;">${JSON.stringify(data.comparison, null, 2)}</pre>`;
+        if (data.note) {
+          compHtml = `<div style="color:var(--warning); margin-bottom:0.5rem; font-size:0.85rem;">ℹ️ ${data.note}</div>` + compHtml;
+        }
+        out.innerHTML = `<div style="background:rgba(0,0,0,0.3); padding:1rem; border-radius:8px;">${compHtml}</div>`;
       } catch (err) {
         out.innerHTML = 'Comparison failed.';
       }

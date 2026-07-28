@@ -53,3 +53,56 @@ def test_classifier_heuristic_fallback_detects_dataset_keywords():
     result = predict_category("A dataset improves prediction accuracy")
 
     assert result["category"] == "ML"
+
+
+def test_qa_llm_error_fallback(monkeypatch):
+    # Mock search_backend to return mock search results
+    from app.api import search
+
+    def mock_search(*args, **kwargs):
+        return [
+            {
+                "doc_id": "doc1",
+                "file_name": "research.pdf",
+                "page_number": 1,
+                "chunk_id": "chunk_0",
+                "score": 0.95,
+                "text": "Deep learning architectures rely on multi-layer neural networks.",
+            }
+        ]
+
+    monkeypatch.setattr(search, "_get_search_backend", lambda: mock_search)
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-fake-key")
+
+    # Mock OpenAI client to simulate 429 quota error
+    class FakeOpenAI:
+        def __init__(self, api_key):
+            pass
+
+        @property
+        def chat(self):
+            class Chat:
+                @property
+                def completions(self):
+                    class Completions:
+                        def create(self, **kwargs):
+                            raise Exception("Error code: 429 - {'error': {'type': 'insufficient_quota'}}")
+
+                    return Completions()
+
+            return Chat()
+
+    import sys
+    monkeypatch.setitem(sys.modules, "openai", type("module", (), {"OpenAI": FakeOpenAI}))
+
+    response = client.post(
+        "/search/qa",
+        json={"query": "What are deep learning architectures?", "mode": "semantic", "k": 3},
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert "OpenAI API Quota Exceeded (Error 429)" in body["answer"]
+    assert "Deep learning architectures" in body["answer"]
+    assert len(body["sources"]) == 1
+    assert body["sources"][0]["doc_id"] == "doc1"
+

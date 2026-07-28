@@ -56,7 +56,12 @@ def summarize_texts(texts: List[str], summary_type: str = "executive"):
             ans = resp.choices[0].message.content
             return {"summary": ans, "source_count": len(texts)}
         except Exception as e:
-            return {"summary": structured_extract_summary(texts), "note": f"LLM error: {e}", "source_count": len(texts)}
+            err_str = str(e)
+            if "insufficient_quota" in err_str or "429" in err_str:
+                note = "OpenAI API Quota Exceeded (Error 429) - Returned extractive structured summary. Please check your OpenAI billing plan."
+            else:
+                note = f"LLM error: {e}"
+            return {"summary": structured_extract_summary(texts), "note": note, "source_count": len(texts)}
     return {
         "summary": structured_extract_summary(texts),
         "note": "LLM not configured; returning extractive structured summary",
@@ -95,7 +100,12 @@ def compare_documents(doc_ids: List[str], focus: str = "compare"):
             ans = resp.choices[0].message.content
             return {"comparison": ans, "docs": doc_ids}
         except Exception as e:
-            return {"comparison": fallback_comparison(docs_context, focus), "note": f"LLM error: {e}", "docs": doc_ids}
+            err_str = str(e)
+            if "insufficient_quota" in err_str or "429" in err_str:
+                note = "OpenAI API Quota Exceeded (Error 429) - Returned extractive comparison. Please check your OpenAI billing plan."
+            else:
+                note = f"LLM error: {e}"
+            return {"comparison": fallback_comparison(docs_context, focus), "note": note, "docs": doc_ids}
     return {
         "comparison": fallback_comparison(docs_context, focus),
         "note": "LLM not configured; returning extractive comparison",
