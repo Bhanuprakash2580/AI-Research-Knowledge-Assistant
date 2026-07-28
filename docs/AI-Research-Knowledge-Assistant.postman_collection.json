@@ -1,0 +1,150 @@
+{
+  "info": {
+    "name": "AI Research Knowledge Assistant",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://127.0.0.1:8000"
+    },
+    {
+      "key": "doc_id",
+      "value": ""
+    },
+    {
+      "key": "session_id",
+      "value": "demo-session"
+    }
+  ],
+  "item": [
+    {
+      "name": "Health Check",
+      "request": {
+        "method": "GET",
+        "url": "{{base_url}}/"
+      }
+    },
+    {
+      "name": "Upload PDF",
+      "request": {
+        "method": "POST",
+        "header": [],
+        "body": {
+          "mode": "formdata",
+          "formdata": [
+            {
+              "key": "file",
+              "type": "file",
+              "src": ""
+            }
+          ]
+        },
+        "url": "{{base_url}}/documents/upload"
+      }
+    },
+    {
+      "name": "Upload Multiple PDFs",
+      "request": {
+        "method": "POST",
+        "body": {
+          "mode": "formdata",
+          "formdata": [
+            {
+              "key": "files",
+              "type": "file",
+              "src": ""
+            }
+          ]
+        },
+        "url": "{{base_url}}/documents/upload-batch"
+      }
+    },
+    {
+      "name": "List Documents",
+      "request": {
+        "method": "GET",
+        "url": "{{base_url}}/documents/"
+      }
+    },
+    {
+      "name": "Get Document",
+      "request": {
+        "method": "GET",
+        "url": "{{base_url}}/documents/{{doc_id}}"
+      }
+    },
+    {
+      "name": "Hybrid Search",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"query\": \"compare methodology and limitations\",\n  \"k\": 5,\n  \"mode\": \"hybrid\"\n}"
+        },
+        "url": "{{base_url}}/search/"
+      }
+    },
+    {
+      "name": "Ask Question",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"query\": \"What are the key findings?\",\n  \"k\": 5,\n  \"mode\": \"hybrid\",\n  \"session_id\": \"{{session_id}}\"\n}"
+        },
+        "url": "{{base_url}}/search/qa"
+      }
+    },
+    {
+      "name": "Summarize Document",
+      "request": {
+        "method": "GET",
+        "url": "{{base_url}}/analysis/summarize/{{doc_id}}?type=executive"
+      }
+    },
+    {
+      "name": "Compare Documents",
+      "request": {
+        "method": "POST",
+        "url": "{{base_url}}/analysis/compare?focus=methodologies",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "[\"first-doc-id\", \"second-doc-id\"]"
+        }
+      }
+    },
+    {
+      "name": "Classify Document",
+      "request": {
+        "method": "GET",
+        "url": "{{base_url}}/analysis/classify/{{doc_id}}"
+      }
+    },
+    {
+      "name": "Analytics",
+      "request": {
+        "method": "GET",
+        "url": "{{base_url}}/analytics/stats"
+      }
+    }
+  ]
+}

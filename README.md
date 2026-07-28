@@ -22,7 +22,7 @@ flowchart LR
 - FastAPI and Uvicorn for REST APIs and Swagger documentation.
 - SQLite for document metadata, conversation history, and query analytics.
 - PyPDF2 for PDF extraction.
-- scikit-learn TF-IDF vectors for local semantic-style retrieval and keyword/hybrid scoring.
+- sentence-transformers embeddings for semantic retrieval when available, with scikit-learn TF-IDF fallback for lightweight local runs.
 - OpenAI API, when `OPENAI_API_KEY` is configured, for generated answers, summaries, and comparisons.
 - TensorFlow/Keras training script plus runtime classifier integration. If TensorFlow/model artifacts are unavailable, the API uses a transparent heuristic fallback.
 
@@ -45,6 +45,7 @@ Open Swagger UI at `http://localhost:8000/docs`.
 | `OPENAI_API_KEY` | Enables LLM-generated QA, summaries, and comparisons. |
 | `OPENAI_MODEL` | Chat model name. Defaults to `gpt-4o-mini`. |
 | `DATABASE_FILE` | SQLite database path. Defaults to `data.db`. |
+| `EMBEDDING_BACKEND` | `auto` uses sentence-transformers if installed; `tfidf` forces local fallback. |
 | `INDEX_DIR` | Local vector/chunk index directory. Defaults to `./index`. |
 | `STORAGE_DIR` | Uploaded PDF storage directory. Defaults to `./storage`. |
 | `TF_CLASSIFIER_PATH` | Saved TensorFlow classifier path. Defaults to `./models/classifier.h5`. |
@@ -54,7 +55,9 @@ Open Swagger UI at `http://localhost:8000/docs`.
 ### Documents
 
 - `POST /documents/upload` uploads one PDF and starts processing.
+- `POST /documents/upload-batch` uploads one or more PDFs and starts processing.
 - `GET /documents/` lists uploaded documents and metadata.
+- `GET /documents/{doc_id}` returns one document's metadata and processing status.
 - `DELETE /documents/{doc_id}` deletes metadata, stored PDF, and index files.
 - `POST /documents/{doc_id}/reprocess` re-runs extraction, chunking, indexing, and classification.
 
@@ -109,6 +112,10 @@ python app/ml/train_classifier.py
 
 The script trains a Keras text classifier and writes the model to `TF_CLASSIFIER_PATH`. Uploaded documents are automatically classified during processing.
 
+## Postman Collection
+
+Import `docs/AI-Research-Knowledge-Assistant.postman_collection.json` into Postman for ready-made requests covering upload, search, QA, summaries, comparisons, classification, and analytics.
+
 ## Limitations
 
 - The local vector index is file-backed and intended for coursework/prototype scale. For large production deployments, replace it with FAISS, Chroma, Qdrant, or another managed vector database.
@@ -121,5 +128,6 @@ Run a quick syntax and API smoke test:
 
 ```bash
 python -m compileall app
+pytest
 python -c "from fastapi.testclient import TestClient; from app.main import app; c=TestClient(app); print(c.get('/').json()); print(c.get('/analytics/stats').json())"
 ```

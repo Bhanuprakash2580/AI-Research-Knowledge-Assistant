@@ -23,10 +23,13 @@ def storage_path(doc_id: str, filename: str) -> Path:
     return STORAGE / f"{doc_id}_{filename}"
 
 
-@router.post("/upload", response_model=DocumentRead)
-async def upload_document(file: UploadFile = File(...), background_tasks: BackgroundTasks = None):
+def validate_pdf(file: UploadFile):
     if not file.filename.lower().endswith(".pdf"):
         raise HTTPException(status_code=400, detail="Only PDF files are supported in this prototype")
+
+
+async def save_and_process(file: UploadFile, background_tasks: BackgroundTasks = None):
+    validate_pdf(file)
     doc = create_document(file.filename)
     doc_id = doc["id"]
     dest = storage_path(doc_id, file.filename)
@@ -40,9 +43,29 @@ async def upload_document(file: UploadFile = File(...), background_tasks: Backgr
     return doc
 
 
+@router.post("/upload", response_model=DocumentRead)
+async def upload_document(file: UploadFile = File(...), background_tasks: BackgroundTasks = None):
+    return await save_and_process(file, background_tasks)
+
+
+@router.post("/upload-batch", response_model=List[DocumentRead])
+async def upload_documents(files: List[UploadFile] = File(...), background_tasks: BackgroundTasks = None):
+    if not files:
+        raise HTTPException(status_code=400, detail="At least one PDF file is required")
+    return [await save_and_process(file, background_tasks) for file in files]
+
+
 @router.get("/", response_model=List[DocumentRead])
 def list_documents():
     return db_list_documents()
+
+
+@router.get("/{doc_id}", response_model=DocumentRead)
+def get_document_detail(doc_id: str):
+    doc = get_document(doc_id)
+    if not doc:
+        raise HTTPException(status_code=404, detail="Document not found")
+    return doc
 
 
 @router.delete("/{doc_id}")
