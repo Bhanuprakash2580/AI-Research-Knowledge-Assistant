@@ -1,16 +1,39 @@
 import os
 import sqlite3
+import tempfile
 import uuid
 from pathlib import Path
 
-DATABASE_PATH = os.getenv("DATABASE_FILE", "data.db")
-Path(DATABASE_PATH).parent.mkdir(parents=True, exist_ok=True)
+
+def _resolve_db_path() -> str:
+    if os.getenv("DATABASE_FILE"):
+        return os.getenv("DATABASE_FILE")
+    if os.getenv("VERCEL"):
+        return os.path.join(tempfile.gettempdir(), "data.db")
+    target = Path("data.db")
+    try:
+        target.parent.mkdir(parents=True, exist_ok=True)
+        test_file = target.parent / ".write_test"
+        test_file.touch(exist_ok=True)
+        test_file.unlink(missing_ok=True)
+        return str(target)
+    except Exception:
+        return os.path.join(tempfile.gettempdir(), "data.db")
+
+
+DATABASE_PATH = _resolve_db_path()
 
 
 def get_connection():
+    target_dir = Path(DATABASE_PATH).parent
+    try:
+        target_dir.mkdir(parents=True, exist_ok=True)
+    except Exception:
+        pass
     conn = sqlite3.connect(DATABASE_PATH, check_same_thread=False)
     conn.row_factory = sqlite3.Row
     return conn
+
 
 
 def initialize_database():

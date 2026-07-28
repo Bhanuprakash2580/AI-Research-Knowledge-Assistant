@@ -12,14 +12,30 @@ import shutil
 import os
 from typing import List
 
+import tempfile
+
 router = APIRouter(prefix="/documents", tags=["documents"])
 
-STORAGE = Path(os.getenv("STORAGE_DIR", "storage"))
-STORAGE.mkdir(parents=True, exist_ok=True)
+
+def _get_storage_dir() -> Path:
+    env_dir = os.getenv("STORAGE_DIR")
+    if env_dir:
+        p = Path(env_dir)
+    elif os.getenv("VERCEL"):
+        p = Path(tempfile.gettempdir()) / "storage"
+    else:
+        p = Path("storage")
+    try:
+        p.mkdir(parents=True, exist_ok=True)
+    except Exception:
+        p = Path(tempfile.gettempdir()) / "storage"
+        p.mkdir(parents=True, exist_ok=True)
+    return p
 
 
 def storage_path(doc_id: str, filename: str) -> Path:
-    return STORAGE / f"{doc_id}_{filename}"
+    return _get_storage_dir() / f"{doc_id}_{filename}"
+
 
 
 def validate_pdf(file: UploadFile):

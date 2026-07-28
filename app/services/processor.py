@@ -1,11 +1,24 @@
 from pathlib import Path
 import json
 import os
+import tempfile
 from ..db import update_document
 from ..classifier import predict_category
 
 
+def get_default_index_dir(provided: str = None) -> str:
+    if provided:
+        return provided
+    env_dir = os.getenv("INDEX_DIR")
+    if env_dir:
+        return env_dir
+    if os.getenv("VERCEL"):
+        return os.path.join(tempfile.gettempdir(), "index")
+    return "index"
+
+
 def clean_text(text: str) -> str:
+
     return " ".join((text or "").replace("\x00", " ").split())
 
 
@@ -55,7 +68,8 @@ def chunk_pages(doc_id: str, file_name: str, pages: list, max_chars=1000, overla
     return chunks
 
 
-def index_document(doc_id: str, chunks: list, index_dir: str = "index"):
+def index_document(doc_id: str, chunks: list, index_dir: str = None):
+    index_dir = get_default_index_dir(index_dir)
     p = Path(index_dir)
     p.mkdir(parents=True, exist_ok=True)
     chunks_file = p / f"{doc_id}_chunks.json"
@@ -81,7 +95,7 @@ def process_document(doc_id: str, file_path: str):
         full_text = clean_text("\n\n".join(pages))
         chunks = chunk_pages(doc_id, file_name, pages)
         classification = predict_category(full_text[:20000])
-        index_document(doc_id, chunks, index_dir=os.getenv("INDEX_DIR", "index"))
+        index_document(doc_id, chunks, index_dir=get_default_index_dir())
         update_document(
             doc_id,
             total_pages=len(pages),
@@ -97,7 +111,8 @@ def process_document(doc_id: str, file_path: str):
         raise
 
 
-def load_registry(index_dir: str = "index"):
+def load_registry(index_dir: str = None):
+    index_dir = get_default_index_dir(index_dir)
     p = Path(index_dir)
     registry = p / "registry.json"
     if not registry.exists():
@@ -106,7 +121,8 @@ def load_registry(index_dir: str = "index"):
         return json.load(f)
 
 
-def load_all_chunks(index_dir: str = "index", doc_ids=None):
+def load_all_chunks(index_dir: str = None, doc_ids=None):
+    index_dir = get_default_index_dir(index_dir)
     reg = load_registry(index_dir)
     selected = set(doc_ids or [])
     all_chunks = []
@@ -115,6 +131,8 @@ def load_all_chunks(index_dir: str = "index", doc_ids=None):
             continue
         chunks_file = info.get("chunks_file")
         if not chunks_file:
+            continue
+        if not Path(chunks_file).exists():
             continue
         with open(chunks_file, "r", encoding="utf-8") as f:
             for chunk in json.load(f):
@@ -134,8 +152,10 @@ def keyword_score(query: str, text: str) -> float:
     return matches / len(query_terms)
 
 
-def search(query: str, top_k: int = 5, index_dir: str = "index", mode: str = "semantic", doc_ids=None):
+def search(query: str, top_k: int = 5, index_dir: str = None, mode: str = "semantic", doc_ids=None):
+    index_dir = get_default_index_dir(index_dir)
     chunks = load_all_chunks(index_dir, doc_ids=doc_ids)
+
     if not chunks:
         return []
 
