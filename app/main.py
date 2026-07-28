@@ -365,17 +365,23 @@ HTML_UI = """<!DOCTYPE html>
     }
 
     async function populateAnalysisSelectors() {
-      const res = await fetch('/documents/');
-      const docs = await res.json();
-      const sumSelect = document.getElementById('sum-doc-select');
-      const checklist = document.getElementById('comp-docs-checklist');
+      try {
+        const res = await fetch('/documents/');
+        if (!res.ok) return;
+        const docs = await res.json();
+        const sumSelect = document.getElementById('sum-doc-select');
+        const checklist = document.getElementById('comp-docs-checklist');
 
-      sumSelect.innerHTML = docs.map(d => `<option value="${d.id}">${d.name}</option>`).join('');
-      checklist.innerHTML = docs.map(d => `
-        <label style="display:block; margin-bottom: 0.3rem;">
-          <input type="checkbox" class="comp-check" value="${d.id}"> ${d.name}
-        </label>
-      `).join('');
+        if (!Array.isArray(docs)) return;
+        if (sumSelect) sumSelect.innerHTML = docs.map(d => `<option value="${d.id}">${d.name}</option>`).join('');
+        if (checklist) checklist.innerHTML = docs.map(d => `
+          <label style="display:block; margin-bottom: 0.3rem;">
+            <input type="checkbox" class="comp-check" value="${d.id}"> ${d.name}
+          </label>
+        `).join('');
+      } catch (err) {
+        console.error('Error populating analysis selectors:', err);
+      }
     }
 
     async function generateSummary() {
@@ -458,9 +464,15 @@ HTML_UI = """<!DOCTYPE html>
 """
 
 @app.get("/", response_class=HTMLResponse)
+@app.get("/ui", response_class=HTMLResponse)
 def root(request: Request):
     accept = request.headers.get("accept", "")
-    if "text/html" in accept or request.query_params.get("ui"):
-        return HTMLResponse(content=HTML_UI)
-    return JSONResponse({"status": "ok", "message": "AI Research & Knowledge Assistant backend"})
+    if request.query_params.get("format") == "json" or ("application/json" in accept and "text/html" not in accept):
+        return JSONResponse({"status": "ok", "message": "AI Research & Knowledge Assistant backend"})
+    return HTMLResponse(content=HTML_UI)
+
+
+@app.get("/health")
+def health_check():
+    return {"status": "ok", "message": "AI Research & Knowledge Assistant backend operational"}
 
