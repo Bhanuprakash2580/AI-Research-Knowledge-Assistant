@@ -1,10 +1,16 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Body
+from pydantic import BaseModel, Field
 from ..services import summarizer
 from ..classifier import predict_category
 from ..db import get_document, update_document
-from typing import List
+from typing import List, Union
 
 router = APIRouter(prefix="/analysis", tags=["analysis"])
+
+
+class CompareRequest(BaseModel):
+    doc_ids: List[str]
+    focus: str = "general"
 
 
 @router.get("/summarize/{doc_id}")
@@ -16,7 +22,13 @@ def summarize(doc_id: str, type: str = "executive"):
 
 
 @router.post("/compare")
-def compare(doc_ids: List[str], focus: str = "general"):
+def compare(payload: Union[CompareRequest, List[str]] = Body(...)):
+    if isinstance(payload, list):
+        doc_ids = payload
+        focus = "general"
+    else:
+        doc_ids = payload.doc_ids
+        focus = payload.focus
     if not doc_ids or len(doc_ids) < 2:
         raise HTTPException(status_code=400, detail="Provide at least two document IDs to compare")
     res = summarizer.compare_documents(doc_ids, focus=focus)

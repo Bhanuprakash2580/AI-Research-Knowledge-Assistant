@@ -1,9 +1,11 @@
 from pathlib import Path
 import json
 from ..db import count_documents, query_stats, list_documents
+from .processor import get_default_index_dir
 
 
-def stats(index_dir: str = "index"):
+def stats(index_dir: str = None):
+    index_dir = get_default_index_dir(index_dir)
     p = Path(index_dir)
     registry = p / "registry.json"
     reg = {}

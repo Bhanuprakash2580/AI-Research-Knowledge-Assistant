@@ -462,24 +462,42 @@ HTML_UI = """<!DOCTYPE html>
       }
     }
 
+    function formatObjectToHtml(obj) {
+      if (typeof obj === 'string') return obj.replace(/\n/g, '<br>');
+      if (!obj || typeof obj !== 'object') return String(obj || '');
+      let html = '<div style="display:flex; flex-direction:column; gap:0.75rem;">';
+      for (const [key, value] of Object.entries(obj)) {
+        const formattedKey = key.replace(/_/g, ' ').replace(/\\b\\w/g, c => c.toUpperCase());
+        html += `<div><strong style="color:var(--primary); font-size:0.9rem;">${formattedKey}:</strong>`;
+        if (Array.isArray(value)) {
+          html += '<ul style="margin-left:1.2rem; margin-top:0.25rem;">' + value.map(item => `<li>${item}</li>`).join('') + '</ul>';
+        } else if (typeof value === 'object' && value !== null) {
+          html += '<div style="margin-left:0.75rem; margin-top:0.25rem;">' + formatObjectToHtml(value) + '</div>';
+        } else {
+          html += `<div style="margin-top:0.25rem; line-height:1.5;">${String(value).replace(/\n/g, '<br>')}</div>`;
+        }
+        html += '</div>';
+      }
+      html += '</div>';
+      return html;
+    }
+
     async function generateSummary() {
       const docId = document.getElementById('sum-doc-select').value;
       const type = document.getElementById('sum-type').value;
       const out = document.getElementById('summary-output');
-      if (!docId) return out.innerHTML = 'Select a document first.';
+      if (!docId) return out.innerHTML = '<span style="color:var(--warning)">Select a document first.</span>';
       out.innerHTML = 'Generating summary...';
       try {
         const res = await fetch(`/analysis/summarize/${docId}?type=${type}`);
         const data = await res.json();
-        let summaryHtml = typeof data.summary === 'string'
-          ? data.summary
-          : `<pre style="white-space:pre-wrap;">${JSON.stringify(data.summary, null, 2)}</pre>`;
+        let summaryHtml = formatObjectToHtml(data.summary);
         if (data.note) {
-          summaryHtml = `<div style="color:var(--warning); margin-bottom:0.5rem; font-size:0.85rem;">ℹ️ ${data.note}</div>` + summaryHtml;
+          summaryHtml = `<div style="color:var(--warning); margin-bottom:0.75rem; font-size:0.85rem;">ℹ️ ${data.note}</div>` + summaryHtml;
         }
-        out.innerHTML = `<div style="background:rgba(0,0,0,0.3); padding:1rem; border-radius:8px;">${summaryHtml}</div>`;
+        out.innerHTML = `<div style="background:rgba(0,0,0,0.3); padding:1.2rem; border-radius:8px; border: 1px solid var(--card-border);">${summaryHtml}</div>`;
       } catch (err) {
-        out.innerHTML = 'Failed to generate summary.';
+        out.innerHTML = '<span style="color:var(--danger)">Failed to generate summary.</span>';
       }
     }
 
@@ -496,15 +514,13 @@ HTML_UI = """<!DOCTYPE html>
           body: JSON.stringify({ doc_ids: selected, focus })
         });
         const data = await res.json();
-        let compHtml = typeof data.comparison === 'string'
-          ? data.comparison
-          : `<pre style="white-space:pre-wrap;">${JSON.stringify(data.comparison, null, 2)}</pre>`;
+        let compHtml = formatObjectToHtml(data.comparison);
         if (data.note) {
-          compHtml = `<div style="color:var(--warning); margin-bottom:0.5rem; font-size:0.85rem;">ℹ️ ${data.note}</div>` + compHtml;
+          compHtml = `<div style="color:var(--warning); margin-bottom:0.75rem; font-size:0.85rem;">ℹ️ ${data.note}</div>` + compHtml;
         }
-        out.innerHTML = `<div style="background:rgba(0,0,0,0.3); padding:1rem; border-radius:8px;">${compHtml}</div>`;
+        out.innerHTML = `<div style="background:rgba(0,0,0,0.3); padding:1.2rem; border-radius:8px; border: 1px solid var(--card-border);">${compHtml}</div>`;
       } catch (err) {
-        out.innerHTML = 'Comparison failed.';
+        out.innerHTML = '<span style="color:var(--danger)">Comparison failed.</span>';
       }
     }
 
