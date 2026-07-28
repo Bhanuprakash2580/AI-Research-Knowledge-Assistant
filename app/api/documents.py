@@ -8,7 +8,6 @@ from ..db import (
     update_document,
 )
 from ..models import DocumentRead
-from ..services import processor
 import shutil
 import os
 from typing import List
@@ -28,6 +27,14 @@ def validate_pdf(file: UploadFile):
         raise HTTPException(status_code=400, detail="Only PDF files are supported in this prototype")
 
 
+def _get_processor_backend():
+    try:
+        from ..services import processor as processor_backend
+    except Exception as exc:
+        raise HTTPException(status_code=501, detail="Document processing backend unavailable") from exc
+    return processor_backend
+
+
 async def save_and_process(file: UploadFile, background_tasks: BackgroundTasks = None):
     validate_pdf(file)
     doc = create_document(file.filename)
@@ -36,10 +43,11 @@ async def save_and_process(file: UploadFile, background_tasks: BackgroundTasks =
     with open(dest, "wb") as f:
         shutil.copyfileobj(file.file, f)
     doc = update_document(doc_id, file_path=str(dest), status="uploaded")
+    processor_backend = _get_processor_backend()
     if background_tasks is not None:
-        background_tasks.add_task(processor.process_document, doc_id, str(dest))
+        background_tasks.add_task(processor_backend.process_document, doc_id, str(dest))
     else:
-        processor.process_document(doc_id, str(dest))
+        processor_backend.process_document(doc_id, str(dest))
     return doc
 
 
@@ -108,5 +116,6 @@ def reprocess_document(doc_id: str):
     file_path = storage_path(doc_id, doc["name"])
     if not file_path.exists():
         raise HTTPException(status_code=404, detail="Original file missing")
-    processor.process_document(doc_id, str(file_path))
+    processor_backend = _get_processor_backend()
+    processor_backend.process_document(doc_id, str(file_path))
     return {"status": "reprocessed"}

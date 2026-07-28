@@ -1,12 +1,19 @@
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
-from ..services.processor import search
 from ..services import memory
 from ..db import record_query
 import os
 from typing import List
 
 router = APIRouter(prefix="/search", tags=["search"])
+
+
+def _get_search_backend():
+    try:
+        from ..services.processor import search as search_backend
+    except Exception as exc:
+        raise HTTPException(status_code=501, detail="Search backend unavailable") from exc
+    return search_backend
 
 
 class SearchRequest(BaseModel):
@@ -24,14 +31,16 @@ class QARequest(SearchRequest):
 def semantic_search(q: str, k: int = 5):
     if not q:
         raise HTTPException(status_code=400, detail="Query required")
-    results = search(q, top_k=k, index_dir=os.getenv("INDEX_DIR", "index"), mode="semantic")
+    search_backend = _get_search_backend()
+    results = search_backend(q, top_k=k, index_dir=os.getenv("INDEX_DIR", "index"), mode="semantic")
     record_query(q, "semantic", referenced_doc_ids=list({r["doc_id"] for r in results}))
     return {"query": q, "results": results}
 
 
 @router.post("/")
 def search_documents(req: SearchRequest):
-    results = search(
+    search_backend = _get_search_backend()
+    results = search_backend(
         req.query,
         top_k=req.k,
         index_dir=os.getenv("INDEX_DIR", "index"),
@@ -69,7 +78,8 @@ def format_history(session_id: str | None):
 
 @router.post("/qa")
 def rag_qa(req: QARequest):
-    results = search(
+    search_backend = _get_search_backend()
+    results = search_backend(
         req.query,
         top_k=req.k,
         index_dir=os.getenv("INDEX_DIR", "index"),
