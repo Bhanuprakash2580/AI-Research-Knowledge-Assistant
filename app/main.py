@@ -303,8 +303,10 @@ HTML_UI = """<!DOCTYPE html>
         const res = await fetch('/documents/upload', { method: 'POST', body: formData });
         const data = await res.json();
         if (res.ok) {
-          statusDiv.innerHTML = `<span style="color:var(--success)">✓ Successfully uploaded & queued processing!</span>`;
+          statusDiv.innerHTML = `<span style="color:var(--success)">✓ Successfully uploaded ${file.name}! Processing in background...</span>`;
           loadDocuments();
+          setTimeout(loadDocuments, 2000);
+          setTimeout(loadDocuments, 5000);
         } else {
           statusDiv.innerHTML = `<span style="color:var(--danger)">Upload failed: ${data.detail || 'Error'}</span>`;
         }

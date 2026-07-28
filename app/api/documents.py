@@ -27,6 +27,9 @@ def _get_storage_dir() -> Path:
         p = Path("storage")
     try:
         p.mkdir(parents=True, exist_ok=True)
+        test_file = p / ".write_test"
+        test_file.touch(exist_ok=True)
+        test_file.unlink(missing_ok=True)
     except Exception:
         p = Path(tempfile.gettempdir()) / "storage"
         p.mkdir(parents=True, exist_ok=True)
@@ -34,13 +37,13 @@ def _get_storage_dir() -> Path:
 
 
 def storage_path(doc_id: str, filename: str) -> Path:
-    return _get_storage_dir() / f"{doc_id}_{filename}"
-
+    safe_name = Path(filename).name
+    return _get_storage_dir() / f"{doc_id}_{safe_name}"
 
 
 def validate_pdf(file: UploadFile):
-    if not file.filename.lower().endswith(".pdf"):
-        raise HTTPException(status_code=400, detail="Only PDF files are supported in this prototype")
+    if not file.filename or not file.filename.lower().endswith(".pdf"):
+        raise HTTPException(status_code=400, detail="Only PDF files (.pdf) are supported")
 
 
 def _get_processor_backend():
@@ -51,29 +54,38 @@ def _get_processor_backend():
     return processor_backend
 
 
-async def save_and_process(file: UploadFile, background_tasks: BackgroundTasks = None):
+async def save_and_process(file: UploadFile, background_tasks: BackgroundTasks):
     validate_pdf(file)
-    doc = create_document(file.filename)
+    safe_filename = Path(file.filename).name
+    doc = create_document(safe_filename)
     doc_id = doc["id"]
-    dest = storage_path(doc_id, file.filename)
-    with open(dest, "wb") as f:
-        shutil.copyfileobj(file.file, f)
+    dest = storage_path(doc_id, safe_filename)
+    try:
+        with open(dest, "wb") as f:
+            shutil.copyfileobj(file.file, f)
+    except Exception as exc:
+        update_document(doc_id, status="failed", classifier_note=f"File save error: {exc}")
+        raise HTTPException(status_code=500, detail=f"Failed to save file: {exc}")
+
     doc = update_document(doc_id, file_path=str(dest), status="uploaded")
     processor_backend = _get_processor_backend()
     if background_tasks is not None:
         background_tasks.add_task(processor_backend.process_document, doc_id, str(dest))
     else:
-        processor_backend.process_document(doc_id, str(dest))
-    return doc
+        try:
+            processor_backend.process_document(doc_id, str(dest))
+        except Exception as exc:
+            print(f"Inline processing error: {exc}")
+    return get_document(doc_id)
 
 
 @router.post("/upload", response_model=DocumentRead)
-async def upload_document(file: UploadFile = File(...), background_tasks: BackgroundTasks = None):
+async def upload_document(background_tasks: BackgroundTasks, file: UploadFile = File(...)):
     return await save_and_process(file, background_tasks)
 
 
 @router.post("/upload-batch", response_model=List[DocumentRead])
-async def upload_documents(files: List[UploadFile] = File(...), background_tasks: BackgroundTasks = None):
+async def upload_documents(background_tasks: BackgroundTasks, files: List[UploadFile] = File(...)):
     if not files:
         raise HTTPException(status_code=400, detail="At least one PDF file is required")
     return [await save_and_process(file, background_tasks) for file in files]

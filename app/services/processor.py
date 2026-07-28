@@ -11,30 +11,43 @@ def get_default_index_dir(provided: str = None) -> str:
         return provided
     env_dir = os.getenv("INDEX_DIR")
     if env_dir:
-        return env_dir
-    if os.getenv("VERCEL"):
-        return os.path.join(tempfile.gettempdir(), "index")
-    return "index"
+        target = Path(env_dir)
+    elif os.getenv("VERCEL"):
+        target = Path(tempfile.gettempdir()) / "index"
+    else:
+        target = Path("index")
+    try:
+        target.mkdir(parents=True, exist_ok=True)
+        test_file = target / ".write_test"
+        test_file.touch(exist_ok=True)
+        test_file.unlink(missing_ok=True)
+        return str(target)
+    except Exception:
+        fallback = Path(tempfile.gettempdir()) / "index"
+        fallback.mkdir(parents=True, exist_ok=True)
+        return str(fallback)
 
 
 def clean_text(text: str) -> str:
-
     return " ".join((text or "").replace("\x00", " ").split())
 
 
 def extract_text_per_page(pdf_path: str):
-    try:
-        from PyPDF2 import PdfReader
-    except Exception:
-        return []
-
-    reader = PdfReader(pdf_path)
     pages = []
-    for page in reader.pages:
+    try:
         try:
-            pages.append(page.extract_text() or "")
+            from PyPDF2 import PdfReader
         except Exception:
-            pages.append("")
+            from pypdf import PdfReader
+        reader = PdfReader(pdf_path)
+        for page in reader.pages:
+            try:
+                txt = page.extract_text() or ""
+                pages.append(txt)
+            except Exception:
+                pages.append("")
+    except Exception as exc:
+        print(f"PDF extraction error for {pdf_path}: {exc}")
     return pages
 
 
@@ -94,6 +107,19 @@ def process_document(doc_id: str, file_path: str):
         file_name = Path(file_path).name
         full_text = clean_text("\n\n".join(pages))
         chunks = chunk_pages(doc_id, file_name, pages)
+        if not chunks:
+            chunks = [
+                {
+                    "id": 0,
+                    "chunk_id": f"{doc_id}_c0",
+                    "doc_id": doc_id,
+                    "file_name": file_name,
+                    "page_number": 1,
+                    "text": full_text or f"Document {file_name} uploaded. (No selectable text extracted).",
+                    "start": 0,
+                    "end": len(full_text),
+                }
+            ]
         classification = predict_category(full_text[:20000])
         index_document(doc_id, chunks, index_dir=get_default_index_dir())
         update_document(
@@ -108,7 +134,6 @@ def process_document(doc_id: str, file_path: str):
         )
     except Exception as exc:
         update_document(doc_id, status="failed", classifier_note=str(exc), file_path=file_path)
-        raise
 
 
 def load_registry(index_dir: str = None):
