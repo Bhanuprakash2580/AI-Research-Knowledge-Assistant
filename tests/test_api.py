@@ -9,6 +9,7 @@ os.environ["EMBEDDING_BACKEND"] = "tfidf"
 
 from fastapi.testclient import TestClient
 
+from app.classifier import predict_category
 from app.main import app
 
 
@@ -38,3 +39,11 @@ def test_qa_without_documents_is_grounded_fallback():
     body = response.json()
     assert body["answer"] == "I cannot determine the answer from the provided documents."
     assert body["sources"] == []
+
+
+def test_classifier_heuristic_fallback_detects_ml_and_cv_keywords():
+    ml_result = predict_category("Use a dataset to train a model")
+    cv_result = predict_category("A camera vision system detects objects")
+
+    assert ml_result["category"] == "ML"
+    assert cv_result["category"] == "CV"
