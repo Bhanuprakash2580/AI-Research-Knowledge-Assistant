@@ -80,7 +80,7 @@ HTML_UI = """<!DOCTYPE html>
     .card-title { font-size: 1.1rem; font-weight: 600; margin-bottom: 1rem; color: #fff; display: flex; justify-content: space-between; align-items: center; }
 
     .upload-area { border: 2px dashed rgba(99, 102, 241, 0.4); border-radius: var(--radius); padding: 2.5rem; text-align: center; cursor: pointer; transition: all 0.2s; background: rgba(99, 102, 241, 0.02); }
-    .upload-area:hover { border-color: var(--primary); background: rgba(99, 102, 241, 0.06); }
+    .upload-area:hover, .upload-area.drag-over { border-color: var(--primary); background: rgba(99, 102, 241, 0.12); transform: scale(1.005); }
 
     .btn { background: var(--primary); color: white; border: none; padding: 0.65rem 1.25rem; border-radius: 8px; font-weight: 500; cursor: pointer; transition: all 0.2s; font-size: 0.9rem; display: inline-flex; align-items: center; gap: 0.5rem; }
     .btn:hover { background: var(--primary-hover); box-shadow: 0 4px 12px var(--primary-glow); }
@@ -134,11 +134,11 @@ HTML_UI = """<!DOCTYPE html>
     <div id="tab-documents" class="tab-content active">
       <div class="card">
         <div class="card-title">Upload Research Documents (PDF)</div>
-        <div class="upload-area" onclick="document.getElementById('pdf-file-input').click()">
+        <div class="upload-area" id="drop-zone" onclick="document.getElementById('pdf-file-input').click()">
           <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="margin-bottom:0.5rem; color:var(--primary)"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M17 8l-5-5-5 5M12 3v12"/></svg>
           <p style="font-weight: 500;">Click to select or drag and drop PDF files</p>
           <p style="color: var(--text-muted); font-size: 0.8rem; margin-top: 0.3rem;">Supports text extraction, page-aware chunking, & automated TF/heuristic classification</p>
-          <input type="file" id="pdf-file-input" accept=".pdf" style="display:none" onchange="uploadDocument(this.files[0])">
+          <input type="file" id="pdf-file-input" accept=".pdf" multiple style="display:none" onchange="handleFileSelect(this)">
         </div>
         <div id="upload-status" style="margin-top: 0.75rem; font-size: 0.85rem;"></div>
       </div>
@@ -290,6 +290,82 @@ HTML_UI = """<!DOCTYPE html>
         `).join('');
       } catch (err) {
         console.error(err);
+      }
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+      initDragAndDrop();
+    });
+
+    function initDragAndDrop() {
+      const dropZone = document.getElementById('drop-zone');
+      if (!dropZone) return;
+
+      ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+        dropZone.addEventListener(eventName, preventDefaults, false);
+        document.body.addEventListener(eventName, preventDefaults, false);
+      });
+
+      ['dragenter', 'dragover'].forEach(eventName => {
+        dropZone.addEventListener(eventName, () => dropZone.classList.add('drag-over'), false);
+      });
+
+      ['dragleave', 'drop'].forEach(eventName => {
+        dropZone.addEventListener(eventName, () => dropZone.classList.remove('drag-over'), false);
+      });
+
+      dropZone.addEventListener('drop', handleDrop, false);
+    }
+
+    function preventDefaults(e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+
+    function handleDrop(e) {
+      const dt = e.dataTransfer;
+      const files = dt ? dt.files : null;
+      if (files && files.length > 0) {
+        uploadFiles(files);
+      }
+    }
+
+    function handleFileSelect(input) {
+      if (input.files && input.files.length > 0) {
+        uploadFiles(input.files);
+      }
+      input.value = '';
+    }
+
+    async function uploadFiles(filesList) {
+      const validFiles = Array.from(filesList).filter(f => f.name && f.name.toLowerCase().endsWith('.pdf'));
+      const statusDiv = document.getElementById('upload-status');
+      
+      if (validFiles.length === 0) {
+        statusDiv.innerHTML = '<span style="color:var(--danger)">Please select or drop valid PDF file(s) (.pdf).</span>';
+        return;
+      }
+
+      if (validFiles.length === 1) {
+        await uploadDocument(validFiles[0]);
+      } else {
+        statusDiv.innerHTML = `<span style="color:var(--warning)">Uploading ${validFiles.length} PDF files...</span>`;
+        const formData = new FormData();
+        validFiles.forEach(f => formData.append('files', f));
+        try {
+          const res = await fetch('/documents/upload-batch', { method: 'POST', body: formData });
+          const data = await res.json();
+          if (res.ok) {
+            statusDiv.innerHTML = `<span style="color:var(--success)">✓ Successfully uploaded ${validFiles.length} PDFs! Processing in background...</span>`;
+            loadDocuments();
+            setTimeout(loadDocuments, 2000);
+            setTimeout(loadDocuments, 5000);
+          } else {
+            statusDiv.innerHTML = `<span style="color:var(--danger)">Upload failed: ${data.detail || 'Error'}</span>`;
+          }
+        } catch (err) {
+          statusDiv.innerHTML = `<span style="color:var(--danger)">Error: ${err.message}</span>`;
+        }
       }
     }
 
@@ -460,6 +536,7 @@ HTML_UI = """<!DOCTYPE html>
 
     // Initial load
     loadDocuments();
+    initDragAndDrop();
   </script>
 </body>
 </html>

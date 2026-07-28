@@ -110,3 +110,50 @@ def test_qa_llm_error_fallback(monkeypatch):
     assert len(body["sources"]) == 1
     assert body["sources"][0]["doc_id"] == "doc1"
 
+
+def test_pdf_upload_single_and_validation():
+    # Test valid PDF upload
+    pdf_content = b"%PDF-1.4\n1 0 obj\n<<>>\nendobj\ntrailer\n<<>>\n%%EOF"
+    res = client.post(
+        "/documents/upload",
+        files={"file": ("sample.pdf", pdf_content, "application/pdf")},
+    )
+    assert res.status_code == 200
+    data = res.json()
+    assert data["name"] == "sample.pdf"
+    assert data["status"] in ("uploaded", "processed")
+
+    # Test non-PDF upload rejection
+    bad_res = client.post(
+        "/documents/upload",
+        files={"file": ("sample.txt", b"Hello text", "text/plain")},
+    )
+    assert bad_res.status_code == 400
+    assert "Only PDF files" in bad_res.json()["detail"]
+
+    # Test empty PDF rejection
+    empty_res = client.post(
+        "/documents/upload",
+        files={"file": ("empty.pdf", b"", "application/pdf")},
+    )
+    assert empty_res.status_code == 400
+    assert "empty" in empty_res.json()["detail"].lower()
+
+
+def test_pdf_upload_batch():
+    pdf1 = b"%PDF-1.4\n1 0 obj\n<<>>\nendobj\ntrailer\n<<>>\n%%EOF"
+    pdf2 = b"%PDF-1.4\n2 0 obj\n<<>>\nendobj\ntrailer\n<<>>\n%%EOF"
+    res = client.post(
+        "/documents/upload-batch",
+        files=[
+            ("files", ("doc1.pdf", pdf1, "application/pdf")),
+            ("files", ("doc2.pdf", pdf2, "application/pdf")),
+        ],
+    )
+    assert res.status_code == 200
+    data = res.json()
+    assert len(data) == 2
+    assert data[0]["name"] == "doc1.pdf"
+    assert data[1]["name"] == "doc2.pdf"
+
+

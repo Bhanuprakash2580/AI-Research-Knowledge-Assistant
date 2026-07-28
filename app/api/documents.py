@@ -42,7 +42,8 @@ def storage_path(doc_id: str, filename: str) -> Path:
 
 
 def validate_pdf(file: UploadFile):
-    if not file.filename or not file.filename.lower().endswith(".pdf"):
+    filename = (file.filename or "").strip("'\" ")
+    if not filename or not filename.lower().endswith(".pdf"):
         raise HTTPException(status_code=400, detail="Only PDF files (.pdf) are supported")
 
 
@@ -56,13 +57,24 @@ def _get_processor_backend():
 
 async def save_and_process(file: UploadFile, background_tasks: BackgroundTasks):
     validate_pdf(file)
-    safe_filename = Path(file.filename).name
+    raw_filename = (file.filename or "").strip("'\" ")
+    safe_filename = Path(raw_filename).name
+
+    try:
+        await file.seek(0)
+    except Exception:
+        pass
+    contents = await file.read()
+    if not contents:
+        raise HTTPException(status_code=400, detail="Uploaded PDF file is empty (0 bytes)")
+
     doc = create_document(safe_filename)
     doc_id = doc["id"]
     dest = storage_path(doc_id, safe_filename)
+
     try:
         with open(dest, "wb") as f:
-            shutil.copyfileobj(file.file, f)
+            f.write(contents)
     except Exception as exc:
         update_document(doc_id, status="failed", classifier_note=f"File save error: {exc}")
         raise HTTPException(status_code=500, detail=f"Failed to save file: {exc}")
